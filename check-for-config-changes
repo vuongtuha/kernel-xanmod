@@ -1,0 +1,49 @@
+#! /bin/bash
+
+# This is a list of toolchain-dependent configs. That is: only those which
+# change .config when gcc, ld, or similar changes.
+#
+# please keep them sorted alphabetically
+declare -a IGNORED_CONFIGS_RE=(
+	'AS_HAS_[A-Z0-9_]*'
+	'AS_VERSION'
+	'CC_CAN_[A-Z_]*'
+	'CC_HAS_[A-Z_]*'
+	'CC_HAVE_[A-Z_]*'
+	'CC_VERSION_TEXT'
+	'FTRACE_MCOUNT_USE_CC'
+	'FTRACE_MCOUNT_USE_RECORDMCOUNT'
+	'GCC_VERSION'
+	'G*CC[0-9]*_NO_[A-Z_]*'
+	'HAVE_[A-Z]*_COMPILER'
+	'LD_VERSION'
+	'PAHOLE_VERSION'
+	'TOOLCHAIN_HAS_[A-Z_]*'
+	'TOOLS_SUPPORT_[A-Z_]*'
+)
+
+declare -a SED_ARGS=()
+
+for CONFIG in "${IGNORED_CONFIGS_RE[@]}"; do
+	SED_ARGS+=(-e "/\\<CONFIG_$CONFIG\\>/ d")
+done
+
+SED_ARGS+=(
+	-e '/^# .* is not set$/p'
+	-e '/^$\|^#/d'
+)
+
+differences="$(
+    diff -bU0 <(sed "${SED_ARGS[@]}" "$1" | sort) \
+	      <(sed "${SED_ARGS[@]}" "$2" | sort) \
+    | grep '^[-+][^-+]'
+)" || true
+if [ -n "$differences" ]; then
+    echo
+    echo "Changes after running \`make oldconfig':"
+    echo "$differences"
+    echo
+    if echo "$differences" | grep -q '^+' ; then
+	exit 1
+    fi
+fi
